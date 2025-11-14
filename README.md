@@ -56,7 +56,7 @@ Add to `packages.yml`:
 ```yaml
 packages:
   - git: "https://github.com/icygiant/versioned_scd"
-
+```
 Then, run
 ```bash
 dbt deps
