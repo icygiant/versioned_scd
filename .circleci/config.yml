@@ -1,9 +1,24 @@
 version: 2.1
 
+commands:
+  install-uv:
+    steps:
+      - run:
+          name: Install uv + sync environment
+          command: |
+            python -m pip install --upgrade pip
+            python -m pip install uv
+            uv sync --locked --frozen --lockfile uv.lock
+  dbt-deps:
+    steps:
+      - run:
+          name: Install dbt deps
+          command: uv run dbt deps --project-dir $DBT_PROJECT_DIR
+
+
 jobs:
 
   integration-tests-core:
-
     docker:
       - image: cimg/python:3.9.9
       - image: cimg/postgres:14.0
@@ -17,18 +32,11 @@ jobs:
 
     steps:
       - checkout
-      - run: &pip-install-uv
-          name: Install uv and sync the requirements
-          command: |
-            python -m pip install uv
-            uv sync --lockfile uv.lock
-
-      - run: &dbt-deps
-          name: Install dbt dependencies
-          command: uv dbt deps --project-dir $DBT_PROJECT_DIR
+      - install-uv
+      - dbt-deps
 
       - run:
-          name: "Run tests - Postgres"
+          name: Run tests - Postgres
           environment:
             POSTGRES_HOST: localhost
             POSTGRES_TEST_USER: postgres
@@ -36,34 +44,32 @@ jobs:
             POSTGRES_TEST_PORT: 5432
             POSTGRES_TEST_DATABASE: circle_test
             POSTGRES_TEST_SCHEMA: versioned_scd_integration_tests
-          command: uv dbt build -t postgres --project-dir $DBT_PROJECT_DIR
+          command: uv run dbt build -t postgres --project-dir $DBT_PROJECT_DIR
 
       - run:
-          name: "Set up GCP credentials"
+          name: Set up GCP credentials
           command: |
             echo "Writing to $BIGQUERY_SERVICE_KEY_PATH"
-            echo $BIGQUERY_SERVICE_KEY > $BIGQUERY_SERVICE_KEY_PATH
-            FILESIZE=$(stat -c%s "$BIGQUERY_SERVICE_KEY_PATH")
-            echo "Size of $BIGQUERY_SERVICE_KEY_PATH = $FILESIZE bytes."
-            echo "BIGQUERY_TEST_DATABASE = $BIGQUERY_TEST_DATABASE"
+            echo "$BIGQUERY_SERVICE_KEY" > "$BIGQUERY_SERVICE_KEY_PATH"
+            stat -c%s "$BIGQUERY_SERVICE_KEY_PATH"
 
       - run:
-          name: "Run tests - BigQuery"
-          command: uv dbt build -t bigquery --project-dir $DBT_PROJECT_DIR
+          name: Run tests - BigQuery
+          command: uv run dbt build -t bigquery --project-dir $DBT_PROJECT_DIR
 
       - run:
-          name: "Run tests - Snowflake"
-          command: uv dbt build -t snowflake --project-dir $DBT_PROJECT_DIR
+          name: Run tests - Snowflake
+          command: uv run dbt build -t snowflake --project-dir $DBT_PROJECT_DIR
 
       - run:
-          name: "Run tests - DuckDB"
-          command: uv dbt build -t duckdb --project-dir $DBT_PROJECT_DIR
+          name: Run tests - DuckDB
+          command: uv run dbt build -t duckdb --project-dir $DBT_PROJECT_DIR
 
       - store_artifacts:
           path: ./logs
 
-  integration-tests-spark-thrift:
 
+  integration-tests-spark-thrift:
     docker:
       - image: cimg/python:3.9.9
       - image: godatadriven/spark:3.1.1
@@ -84,29 +90,29 @@ jobs:
       DBT_PROFILES_DIR: ./src/integration_tests/ci
       DBT_PROJECT_DIR: ./src/integration_tests
 
-
     steps:
       - checkout
       - run:
-          name: Install Ubuntu packages
+          name: Install system libraries
           command: |
             sudo apt-get update
-            sudo apt-get install libsasl2-dev libsasl2-2
-      - run: *pip-install-uv
-      - run: *dbt-deps
+            sudo apt-get install -y libsasl2-dev libsasl2-2
+      - install-uv
+      - dbt-deps
+
       - run:
-          name: Wait for Spark-Thrift
+          name: Wait for Spark-Thrift Server
           command: dockerize -wait tcp://localhost:10000 -timeout 15m -wait-retry-interval 5s
+
       - run:
-          name: "Run tests - Spark"
-          command: dbt build -t spark --project-dir $DBT_PROJECT_DIR
+          name: Run tests - Spark
+          command: uv run dbt build -t spark --project-dir $DBT_PROJECT_DIR
 
       - store_artifacts:
           path: ./logs
 
 
   integration-tests-trino:
-
     docker:
       - image: cimg/python:3.11
       - image: trinodb/trino:432
@@ -119,17 +125,22 @@ jobs:
 
     steps:
       - checkout
-      - run: *pip-install-uv
-      - run: *dbt-deps
+      - install-uv
+      - dbt-deps
       - setup_remote_docker
+
       - run:
           name: Run Trino server
           command: |
-            docker run --name trino -p 8080:8080 -d -v `pwd`/integration_tests/docker/trino/catalog:/etc/trino/catalog trinodb/trino:432
-            timeout 5m bash -c -- 'while ! docker logs trino 2>&1 | tail -n 1 | grep "SERVER STARTED"; do sleep 2; done'
+            docker run --name trino -p 8080:8080 -d \
+              -v `pwd`/integration_tests/docker/trino/catalog:/etc/trino/catalog \
+              trinodb/trino:432
+            timeout 5m bash -c 'while ! docker logs trino 2>&1 | grep "SERVER STARTED"; do sleep 2; done'
+
       - run:
-          name: "Run tests - Trino"
-          command: dbt build -t trino --project-dir $DBT_PROJECT_DIR
+          name: Run tests - Trino
+          command: uv run dbt build -t trino --project-dir $DBT_PROJECT_DIR
+
 
 
 workflows:
@@ -139,11 +150,9 @@ workflows:
       - hold:
           type: approval
       - integration-tests-core:
-          requires:
-            - hold
+          requires: [hold]
       - integration-tests-spark-thrift:
-          requires:
-            - hold
+          requires: [hold]
       - integration-tests-trino:
-          requires:
-            - hold
+          requires: [hold]
+
