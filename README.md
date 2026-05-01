@@ -1,28 +1,27 @@
 # scd2_plus: advanced scd type 2 materialization for dbt
 
-The `scd2_plus` package provides a custom dbt materialization designed for high-fidelity slowly changing dimension type 2 (scd2) implementations[cite: 1]. This documentation serves as a supplement to the primary technical details found in the README.md file[cite: 1]. The materialization extends standard dbt snapshot logic by providing native support for deduplication, hybrid persistence models, and non-sequential historical ingestion[cite: 1].
+The `scd2_plus` package provides a custom dbt materialization designed for high-fidelity slowly changing dimension type 2 (scd2) implementations. The materialization extends standard dbt snapshot logic by providing native support for deduplication, hybrid persistence models, and non-sequential historical ingestion.
 
 ---
 
 ## functional capabilities
 
-* **deterministic change detection**: generates a new record version when any column defined in `check_cols` changes, mirroring the dbt `check` strategy[cite: 1].
-* **temporal interval management**: uses an `updated_at` source column to define the `valid_from` and `valid_to` boundaries for each record[cite: 1].
-* **historical ingestion support**: handles batch-style historical loads, including duplicate records and data arriving out of chronological order[cite: 1].
-* **conflict resolution**: implements deduplication using a composite of `unique_key` and `updated_at`, resolving collisions via the latest `loaddate`[cite: 1].
-* **incremental processing**: supports standard incremental patterns, including table initialization, record insertion for new states, and updates to existing rows to maintain temporal integrity[cite: 1].
-* **late-arriving event handling**: maintains temporal continuity for late-arriving data by automatically splitting existing intervals to accommodate new historical states[cite: 1].
+* **deterministic change detection**: generates a new record version when any column defined in `check_cols` changes, mirroring the dbt `check` strategy.
+* **temporal interval management**: uses an `updated_at` source column to define the `valid_from` and `valid_to` boundaries for each record.
+* **historical ingestion support**: handles batch-style historical loads, including duplicate records and data arriving out of chronological order.
+* **conflict resolution**: implements deduplication using a composite of `unique_key` and `updated_at`, resolving collisions via the latest `loaddate`.
+* **incremental processing**: supports standard incremental patterns, including table initialization, record insertion for new states, and updates to existing rows to maintain temporal integrity.
+* **late-arriving event handling**: maintains temporal continuity for late-arriving data by automatically splitting existing intervals to accommodate new historical states.
 * **multi-state persistence model**:
-    * **type II (check_cols)**: provides full versioning for historical tracking[cite: 1].
-    * **type I (punch_thru_cols)**: applies global updates across all historical versions of a record[cite: 1].
-    * **current-state (update_cols)**: applies updates exclusively to the most recent version of a record[cite: 1].
-* **integrity validation**: includes automated testing to identify gaps or overlaps within the `valid_from` and `valid_to` sequences[cite: 1].
+    * **type II (check_cols)**: provides full versioning for historical tracking.
+    * **type I (punch_thru_cols)**: applies global updates across all historical versions of a record.
+    * **current-state (update_cols)**: applies updates exclusively to the most recent version of a record.
+* **integrity validation**: includes automated testing to identify gaps or overlaps within the `valid_from` and `valid_to` sequences.
 
 ---
 
 ## technical specifications
 
-The following table outlines the generated columns as described in README.md[cite: 1]:
 
 | purpose | default column name | configuration variable |
 | :--- | :--- | :--- |
@@ -34,28 +33,28 @@ The following table outlines the generated columns as described in README.md[cit
 | update timestamp | `updatedate` | `scd_updatedate_col_name` |
 | change vector hash | `scd_hash` | internal only |
 
-[cite: 1]
 
 ### supported adapters
-The materialization is compatible with postgres, snowflake, bigquery, spark, duckdb, and trino[cite: 1].
+
+The materialization is compatible with postgres, snowflake, bigquery, spark, duckdb, and trino.
 
 ---
 
 ## installation
 
-Add the package to your `packages.yml` file[cite: 1]:
+Add the package to your `packages.yml` file:
 
 ```yaml
 packages:
   - git: "https://github.com/icygiant/versioned_scd"
 ```
 
-Update your project dependencies[cite: 1]:
+Update your project dependencies:
 ```bash
 dbt deps
 ```
 
-Define the baseline load date in your `dbt_project.yml`[cite: 1]:
+Define the baseline load date in your `dbt_project.yml`:
 ```yaml
 vars:
   loaddate: "1900-01-01"
@@ -65,7 +64,7 @@ vars:
 
 ## limitations
 
-* **soft deletes**: the materialization does not support the detection or management of records deleted from the source[cite: 1].
-* **schema evolution**: automated schema modifications, such as adding or removing columns, are not supported[cite: 1].
-* **model contracts**: the implementation is currently incompatible with dbt model contracts[cite: 1].
-* **field scope**: only columns explicitly defined in the configuration are materialized; any extra fields in the `select` statement are ignored[cite: 1].
+* **soft deletes**: the materialization does not support the detection or management of records flagged as 'deleted' but not actually erased from the source.
+* **schema evolution**: automated schema modifications, such as adding or removing columns, are not supported.
+* **model contracts**: the implementation is currently incompatible with dbt model contracts.
+* **field scope**: only columns explicitly defined in the configuration are materialized; any extra fields in the `select` statement are ignored.
